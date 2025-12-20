@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+  server:
+    source:
+      repo: your-repo-url
+      rootDirectory: /server
+    variables:
+      NODE_ENV: production
+      PORT: ${{ PORT }}
