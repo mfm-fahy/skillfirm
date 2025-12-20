@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const aiRoutes = require('./routes/ai');
 const communityRoutes = require('./routes/community');
 const taskRoutes = require('./routes/tasks');
+const userRoutes = require('./routes/users');
 
 const app = express();
 
@@ -14,11 +15,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ message: 'SkillFarm API is running!', status: 'OK' });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/users', userRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
