@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Progress } from "@/components/ui/progress"
 
+import API_BASE_URL from "@/lib/api"
+
 const avatarOptions = [
   "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
   "https://api.dicebear.com/7.x/avataaars/svg?seed=2", 
@@ -64,7 +66,7 @@ export default function SignupPage() {
 
   const fetchCareerFields = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/career-fields')
+      const response = await fetch(`${API_BASE_URL}/api/auth/career-fields`)
       const data = await response.json()
       setCareerFields(data.fields)
     } catch (error) {
@@ -74,7 +76,7 @@ export default function SignupPage() {
 
   const fetchPsychometricTest = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/psychometric-test')
+      const response = await fetch(`${API_BASE_URL}/api/auth/psychometric-test`)
       const data = await response.json()
       setPsychometricTest(data.test.questions || [])
     } catch (error) {
@@ -88,7 +90,7 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/basic', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/basic`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -118,7 +120,7 @@ export default function SignupPage() {
 
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/usertype', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/usertype`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempUserId, userType, password: formData.password })
@@ -143,7 +145,7 @@ export default function SignupPage() {
   const handleSchoolAnalysis = async (hasIdea: boolean, field?: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/school-analysis', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/school-analysis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -180,7 +182,7 @@ export default function SignupPage() {
   const handleCollegeAnalysis = async (field: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/college-analysis', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/college-analysis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempUserId, selectedField: field })
@@ -206,7 +208,7 @@ export default function SignupPage() {
   const handleEmployeeFieldSwitch = async (currentField: string, targetField: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/employee-field-switch', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/employee-field-switch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -240,7 +242,7 @@ export default function SignupPage() {
   const handleEmployeeAnalysis = async (currentField: string, wantToSwitch: boolean, developCurrent: boolean) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/employee-analysis', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/employee-analysis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -274,7 +276,7 @@ export default function SignupPage() {
   const handlePsychometricSubmit = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/psychometric-test', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/psychometric-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -302,7 +304,7 @@ export default function SignupPage() {
   const completeRegistration = async (selectedOption?: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register/complete', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempUserId, selectedOption })
