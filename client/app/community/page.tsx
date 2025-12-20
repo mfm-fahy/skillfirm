@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Heart, MessageCircle, Plus } from "lucide-react"
+import API_BASE_URL from "@/lib/api"
 
 interface Post {
   _id: string
@@ -48,7 +49,7 @@ export default function CommunityPage() {
 
   const fetchPosts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/community/posts')
+      const response = await fetch(`${API_BASE_URL}/api/community/posts`)
       const data = await response.json()
       setPosts(data.posts)
     } catch (error) {
@@ -63,7 +64,7 @@ export default function CommunityPage() {
     if (!token) return
 
     try {
-      const response = await fetch('http://localhost:5000/api/community/posts', {
+      const response = await fetch(`${API_BASE_URL}/api/community/posts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,7 +88,7 @@ export default function CommunityPage() {
     if (!token) return
 
     try {
-      await fetch(`http://localhost:5000/api/community/posts/${postId}/like`, {
+      await fetch(`${API_BASE_URL}/api/community/posts/${postId}/like`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

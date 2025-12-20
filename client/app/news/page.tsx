@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
 import { ExternalLink, Clock, RefreshCw } from "lucide-react"
+import API_BASE_URL from "@/lib/api"
 
 interface NewsArticle {
   title: string
@@ -33,7 +34,7 @@ export default function NewsPage() {
   const generateNews = async (field: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/generate-news', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/generate-news`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })

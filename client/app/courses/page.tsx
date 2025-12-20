@@ -5,6 +5,7 @@ import { Navbar } from "@/components/navbar"
 import { Search, Play, Clock, Eye, RefreshCw, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import API_BASE_URL from "@/lib/api"
 
 interface Course {
   id: string
@@ -38,7 +39,7 @@ export default function CoursesPage() {
   const generateCourses = async (field: string) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/generate-courses', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/generate-courses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })
@@ -59,7 +60,7 @@ export default function CoursesPage() {
     
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/search-courses', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/search-courses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery.trim() })

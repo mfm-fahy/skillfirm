@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Navbar } from "@/components/navbar"
 import { Send, Bot, User } from 'lucide-react'
+import API_BASE_URL from "@/lib/api"
 
 interface Message {
   id: number
@@ -54,7 +55,7 @@ export default function ChatAIPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
