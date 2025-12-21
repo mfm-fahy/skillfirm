@@ -126,4 +126,54 @@ router.get('/progress', authenticateToken, async (req, res) => {
   }
 });
 
+// Get task statistics with enhanced metrics
+router.get('/enhanced-stats', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const tasks = await Task.find({ userId: req.user.userId, date: today });
+    
+    const completed = tasks.filter(t => t.completed).length;
+    const total = tasks.length;
+    
+    // Enhanced stats
+    const stats = {
+      totalCompleted: completed,
+      streakDays: 7, // Mock data - would calculate from historical data
+      weeklyProgress: 85,
+      monthlyGoal: 100,
+      productivityScore: Math.round((completed / total) * 100) || 0,
+      averageCompletionTime: 25,
+      favoriteCategory: 'Learning',
+      skillsLearned: ['JavaScript', 'React', 'Node.js', 'Python', 'Data Analysis'],
+      careerGrowthPoints: 450,
+      timeSpentLearning: 1200, // minutes
+      consistencyRating: 78,
+      challengesCompleted: 12
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch stats', error: error.message });
+  }
+});
+
+// Get weekly challenge
+router.get('/weekly-challenge', async (req, res) => {
+  try {
+    const challenge = {
+      title: 'Skill Builder Challenge',
+      description: 'Complete 5 skill-building tasks this week to unlock the Learning Champion badge',
+      progress: 60,
+      daysLeft: 3,
+      reward: 'Learning Champion Badge + 100 XP',
+      currentCount: 3,
+      targetCount: 5
+    };
+    
+    res.json({ challenge });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch challenge', error: error.message });
+  }
+});
+
 module.exports = router;

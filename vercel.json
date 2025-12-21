@@ -1,1 +1,22 @@
-{}
+{
+  "version": 2,
+  "buildCommand": "cd client && npm run build",
+  "outputDirectory": "client/.next",
+  "installCommand": "cd client && npm install",
+  "framework": "nextjs",
+  "functions": {
+    "client/app/**/*.tsx": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://skillfarm-backend.onrender.com",
+    "NEXT_PUBLIC_SOCKET_URL": "https://skillfarm-backend.onrender.com"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://skillfarm-backend.onrender.com",
+      "NEXT_PUBLIC_SOCKET_URL": "https://skillfarm-backend.onrender.com"
+    }
+  }
+}

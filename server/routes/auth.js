@@ -321,7 +321,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         userType: user.userType,
         avatar: user.avatar,
-        registrationComplete: user.registrationComplete
+        registrationComplete: user.registrationComplete,
+        selectedCareerField: user.selectedCareerField || user.currentField
       }
     });
   } catch (error) {
@@ -483,11 +484,24 @@ async function suggestFieldDevelopment(currentField) {
   const prompt = `For career advancement in "${currentField}", provide specific development paths and growth opportunities. Focus on realistic next steps. Respond in JSON format:
 {
   "development": [
-    {"path": "career advancement path", "skills": ["skills to develop"], "timeline": "time needed", "outcome": "expected career outcome"}
+    {"path": "Senior Developer", "skills": ["Leadership", "Architecture"], "timeline": "2-3 years", "outcome": "Lead technical teams"},
+    {"path": "Technical Specialist", "skills": ["Advanced frameworks", "Cloud"], "timeline": "1-2 years", "outcome": "Become domain expert"}
   ]
 }`;
   
-  return await callOpenRouter(prompt);
+  const result = await callOpenRouter(prompt);
+  
+  // Add fallback if structure is wrong
+  if (!result.development || !Array.isArray(result.development)) {
+    return {
+      development: [
+        { path: "Senior Role", skills: ["Leadership", "Advanced Skills"], timeline: "2-3 years", outcome: "Lead teams and projects" },
+        { path: "Specialist", skills: ["Domain Expertise", "Certification"], timeline: "1-2 years", outcome: "Become subject matter expert" }
+      ]
+    };
+  }
+  
+  return result;
 }
 
 // Generate psychometric test using AI

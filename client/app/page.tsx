@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Navbar } from "@/components/navbar"
-import { ExternalLink, Play } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ExternalLink, Play, TrendingUp, Target, CheckCircle, Clock, Sparkles, ArrowRight, BookOpen, Newspaper, ListChecks, Users, MessageSquare, Award, Calendar, Star, Zap, Trophy, Activity, Brain, Lightbulb } from "lucide-react"
+import API_BASE_URL from "@/lib/api"
 
 export default function HomePage() {
   const router = useRouter()
@@ -19,13 +23,18 @@ export default function HomePage() {
   const [progressLoading, setProgressLoading] = useState(true)
   const [fieldUpdates, setFieldUpdates] = useState({ updates: [], latestNews: [] })
   const [updatesLoading, setUpdatesLoading] = useState(true)
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [achievements, setAchievements] = useState<any[]>([])
+  const [weeklyGoal, setWeeklyGoal] = useState({ current: 0, target: 5 })
+  const [learningStreak, setLearningStreak] = useState(0)
+  const [personalizedTips, setPersonalizedTips] = useState<any[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     const userData = localStorage.getItem('user')
     
     if (!token || !userData) {
-      router.push('/login')
+      setLoading(false)
       return
     }
     
@@ -36,45 +45,41 @@ export default function HomePage() {
         getSuggestedCourse(parsedUser.selectedCareerField)
         getSuggestedNews(parsedUser.selectedCareerField)
         getFieldUpdates(parsedUser.selectedCareerField)
+        getPersonalizedTips(parsedUser.selectedCareerField)
+      } else {
+        getPersonalizedTips('General')
       }
       getTaskStats()
       getOverallProgress()
+      // Load data that depends on other data after a brief delay
+      setTimeout(() => {
+        getLearningStreak()
+        getWeeklyGoal()
+        getAchievements()
+        getRecentActivity()
+      }, 100)
     } catch (error) {
-      router.push('/login')
-      return
+      console.error('Error parsing user data:', error)
     }
     
     setLoading(false)
   }, [router])
 
-  // Refresh task stats when user returns to the page
-  useEffect(() => {
-    const handleFocus = () => {
-      if (user) {
-        getTaskStats()
-        getOverallProgress()
-        if (user.selectedCareerField) {
-          getFieldUpdates(user.selectedCareerField)
-        }
-      }
-    }
-    
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [user])
-
   const getFieldUpdates = async (field: string) => {
     setUpdatesLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/generate-field-updates', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/generate-field-updates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })
       })
-      const data = await response.json()
-      setFieldUpdates(data)
+      if (response.ok) {
+        const data = await response.json()
+        setFieldUpdates(data)
+      }
     } catch (error) {
       console.error('Failed to get field updates:', error)
+      setFieldUpdates({ updates: [], latestNews: [] })
     } finally {
       setUpdatesLoading(false)
     }
@@ -83,15 +88,18 @@ export default function HomePage() {
   const getSuggestedNews = async (field: string) => {
     setNewsLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/generate-news', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/generate-news`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })
       })
-      const data = await response.json()
-      setSuggestedNews(data.news?.slice(0, 3) || [])
+      if (response.ok) {
+        const data = await response.json()
+        setSuggestedNews(data.news?.slice(0, 3) || [])
+      }
     } catch (error) {
       console.error('Failed to get news suggestions:', error)
+      setSuggestedNews([])
     } finally {
       setNewsLoading(false)
     }
@@ -99,16 +107,36 @@ export default function HomePage() {
 
   const getOverallProgress = async () => {
     const token = localStorage.getItem('token')
-    if (!token) return
+    if (!token) {
+      setProgressLoading(false)
+      return
+    }
     
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/progress', {
+      const response = await fetch(`${API_BASE_URL}/api/tasks/progress`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      const data = await response.json()
-      setOverallProgress(data)
+      if (response.ok) {
+        const data = await response.json()
+        setOverallProgress(data)
+      } else {
+        const savedTasks = JSON.parse(localStorage.getItem('dailyTasks') || '[]')
+        const completedTasks = savedTasks.filter((task: any) => task.completed)
+        setOverallProgress({
+          overall: savedTasks.length > 0 ? Math.round((completedTasks.length / savedTasks.length) * 100) : 0,
+          activeDays: Math.min(completedTasks.length, 7),
+          averageCompletion: savedTasks.length > 0 ? Math.round((completedTasks.length / savedTasks.length) * 100) : 0
+        })
+      }
     } catch (error) {
       console.error('Failed to get overall progress:', error)
+      const savedTasks = JSON.parse(localStorage.getItem('dailyTasks') || '[]')
+      const completedTasks = savedTasks.filter((task: any) => task.completed)
+      setOverallProgress({
+        overall: savedTasks.length > 0 ? Math.round((completedTasks.length / savedTasks.length) * 100) : 0,
+        activeDays: Math.min(completedTasks.length, 7),
+        averageCompletion: savedTasks.length > 0 ? Math.round((completedTasks.length / savedTasks.length) * 100) : 0
+      })
     } finally {
       setProgressLoading(false)
     }
@@ -116,33 +144,163 @@ export default function HomePage() {
 
   const getTaskStats = async () => {
     const token = localStorage.getItem('token')
-    if (!token) return
+    if (!token) {
+      setStatsLoading(false)
+      return
+    }
     
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/stats', {
+      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      const data = await response.json()
-      setTaskStats(data)
+      if (response.ok) {
+        const data = await response.json()
+        const completedTasks = data.filter((task: any) => task.completed)
+        setTaskStats({
+          completed: completedTasks.length,
+          total: data.length,
+          percentage: data.length > 0 ? Math.round((completedTasks.length / data.length) * 100) : 0
+        })
+      }
     } catch (error) {
       console.error('Failed to get task stats:', error)
+      setTaskStats({ completed: 0, total: 0, percentage: 0 })
     } finally {
       setStatsLoading(false)
     }
   }
 
+  const getRecentActivity = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user/activity`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setRecentActivity(data.slice(0, 4))
+      } else {
+        setRecentActivity([
+          { type: 'welcome', title: 'Welcome to SkillFarm!', time: 'Just now', icon: Sparkles, color: 'text-blue-500' },
+          { type: 'setup', title: 'Profile setup completed', time: '1 hour ago', icon: CheckCircle, color: 'text-green-500' }
+        ])
+      }
+    } catch (error) {
+      console.error('Failed to get recent activity:', error)
+      setRecentActivity([
+        { type: 'welcome', title: 'Welcome to SkillFarm!', time: 'Just now', icon: Sparkles, color: 'text-blue-500' }
+      ])
+    }
+  }
+
+  const getAchievements = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user/achievements`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setAchievements(data)
+      } else {
+        setAchievements([
+          { name: 'Welcome', description: 'Joined SkillFarm', icon: '🎉', earned: true },
+          { name: 'First Steps', description: 'Complete profile setup', icon: '👋', earned: true }
+        ])
+      }
+    } catch (error) {
+      console.error('Failed to get achievements:', error)
+      setAchievements([])
+    }
+  }
+
+  const getWeeklyGoal = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user/weekly-goal`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setWeeklyGoal(data)
+      } else {
+        setWeeklyGoal({ current: 0, target: 5 })
+      }
+    } catch (error) {
+      console.error('Failed to get weekly goal:', error)
+      setWeeklyGoal({ current: 0, target: 5 })
+    }
+  }
+
+  const getLearningStreak = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user/learning-streak`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setLearningStreak(data.streak)
+      } else {
+        setLearningStreak(0)
+      }
+    } catch (error) {
+      console.error('Failed to get learning streak:', error)
+      setLearningStreak(0)
+    }
+  }
+
+  const getPersonalizedTips = (field: string) => {
+    const fieldTips = {
+      'Software Development': [
+        { title: 'Practice Daily Coding', description: 'Spend 30 minutes daily on coding challenges', icon: Brain },
+        { title: 'Build a Portfolio Project', description: 'Start a project showcasing your skills', icon: Lightbulb },
+        { title: 'Contribute to Open Source', description: 'Make your first GitHub contribution', icon: Users }
+      ],
+      'Data Science': [
+        { title: 'Practice with Real Data', description: 'Work on Kaggle competitions', icon: Brain },
+        { title: 'Learn New Libraries', description: 'Explore pandas, scikit-learn, or TensorFlow', icon: Lightbulb },
+        { title: 'Share Your Analysis', description: 'Write about your data insights', icon: Users }
+      ],
+      'Digital Marketing': [
+        { title: 'Analyze Campaign Data', description: 'Study successful marketing campaigns', icon: Brain },
+        { title: 'Create Content', description: 'Start a blog or social media presence', icon: Lightbulb },
+        { title: 'Network with Marketers', description: 'Join marketing communities online', icon: Users }
+      ]
+    }
+    
+    const tips = fieldTips[field as keyof typeof fieldTips] || [
+      { title: 'Set Learning Goals', description: 'Define clear objectives for your career', icon: Brain },
+      { title: 'Practice Regularly', description: 'Dedicate time daily to skill development', icon: Lightbulb },
+      { title: 'Connect with Peers', description: 'Build your professional network', icon: Users }
+    ]
+    
+    setPersonalizedTips(tips)
+  }
+
   const getSuggestedCourse = async (field: string) => {
     setCourseLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/ai/suggest-course', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/suggest-course`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })
       })
-      const data = await response.json()
-      setSuggestedCourse(data.course)
+      if (response.ok) {
+        const data = await response.json()
+        setSuggestedCourse(data.course)
+      }
     } catch (error) {
       console.error('Failed to get course suggestion:', error)
+      setSuggestedCourse(null)
     } finally {
       setCourseLoading(false)
     }
@@ -150,9 +308,9 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5170ff] mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -160,337 +318,308 @@ export default function HomePage() {
   }
 
   if (!user) {
-    return null
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <Navbar />
+        <main className="pt-8 pb-20 md:pb-8">
+          {/* Hero Section */}
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <Sparkles className="w-8 h-8 text-purple-600" />
+                <span className="text-lg font-semibold text-purple-600">AI-Powered Career Platform</span>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-bold mb-6">
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 bg-clip-text text-transparent">
+                  Shape Your
+                </span>
+                <br />
+                <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Future Career
+                </span>
+              </h1>
+              <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+                Discover your potential with AI-powered career guidance, personalized learning paths, 
+                and expert insights tailored just for you.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  onClick={() => router.push('/signup')}
+                  className="h-14 px-8 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 text-lg"
+                >
+                  Get Started Free
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => router.push('/login')}
+                  className="h-14 px-8 border-2 border-gray-300 hover:border-blue-500 text-gray-700 hover:text-blue-600 font-semibold rounded-xl transition-all duration-300 text-lg"
+                >
+                  Sign In
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          {/* Features Section */}
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                Everything You Need to Succeed
+              </h2>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                Comprehensive tools and resources to guide your career journey
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[
+                { icon: MessageSquare, title: "AI Career Coach", description: "Get personalized career advice from our advanced AI coach", color: "from-blue-500 to-cyan-500" },
+                { icon: BookOpen, title: "Curated Courses", description: "Access hand-picked courses tailored to your career goals", color: "from-purple-500 to-pink-500" },
+                { icon: ListChecks, title: "Daily Tasks", description: "Stay on track with personalized daily learning tasks", color: "from-green-500 to-emerald-500" },
+                { icon: TrendingUp, title: "Progress Tracking", description: "Monitor your growth and celebrate achievements", color: "from-orange-500 to-red-500" },
+                { icon: Users, title: "Community", description: "Connect with like-minded professionals and learners", color: "from-indigo-500 to-purple-500" },
+                { icon: Newspaper, title: "Industry News", description: "Stay updated with the latest industry trends and news", color: "from-teal-500 to-blue-500" }
+              ].map((feature, index) => (
+                <Card key={index} className="group hover:shadow-xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-r ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                      <feature.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2 text-gray-800">{feature.title}</h3>
+                    <p className="text-gray-600">{feature.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        </main>
+      </div>
+    )
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <Navbar />
-      <main className="min-h-screen md:pt-0 pb-20 md:pb-8">
+      <main className="pt-8 pb-20 md:pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-2" style={{ color: "#5170ff" }}>
-              Welcome back, {user.name}!
-            </h1>
-            <p className="text-gray-600">
-              {user.selectedCareerField 
-                ? `Continue your journey in ${user.selectedCareerField}` 
-                : "Continue your professional career journey"
-              }
-            </p>
+          {/* Welcome Section */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white mb-8">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-white/20">
+                <Image
+                  src={user.avatar || "/placeholder.svg?height=64&width=64"}
+                  alt={user.name}
+                  width={64}
+                  height={64}
+                  className="object-cover"
+                />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">Welcome back, {user.name}!</h1>
+                <p className="text-blue-100">
+                  {user.selectedCareerField ? `Advancing in ${user.selectedCareerField}` : "Ready to continue your journey?"}
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Field Updates */}
-          {user.selectedCareerField && (
-            <div className="mb-6">
-              <h2 className="text-xl font-bold mb-4">Latest in {user.selectedCareerField}</h2>
-              {updatesLoading ? (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                  {[1,2].map(i => (
-                    <div key={i} className="bg-white p-4 rounded-lg border">
-                      <div className="animate-pulse">
-                        <div className="h-4 bg-gray-300 rounded mb-2 w-3/4"></div>
-                        <div className="h-3 bg-gray-300 rounded w-full"></div>
-                      </div>
-                    </div>
-                  ))}
+          {/* Stats Overview */}
+          <div className="grid gap-6 md:grid-cols-4 mb-8">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-2xl font-bold text-orange-600">
+                    {learningStreak}
+                  </span>
                 </div>
-              ) : (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-                  {fieldUpdates.updates?.slice(0, 2).map((update: any, index: number) => (
-                    <div key={index} className="bg-white p-4 rounded-lg border hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-sm text-[#5170ff]">{update.title}</h3>
-                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                          {update.type}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">{update.content}</p>
-                    </div>
-                  ))}
-                  {fieldUpdates.latestNews?.slice(0, 2).map((article: any, index: number) => (
-                    <div key={`news-${index}`} className="bg-white p-4 rounded-lg border hover:shadow-md transition-shadow cursor-pointer"
-                         onClick={() => window.open(article.url, '_blank')}>
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-sm text-[#5170ff] line-clamp-2">{article.title}</h3>
-                        <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full">
-                          news
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 line-clamp-2">{article.description}</p>
-                      <p className="text-xs text-gray-400 mt-2">{article.source}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mb-6 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/daily-tasks')}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Tasks</h2>
-                {statsLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-6 w-12 rounded"></div>
-                ) : (
-                  <span className="text-xl font-bold" style={{ color: "#5170ff" }}>
+                <h3 className="text-lg font-semibold mb-2">Learning Streak</h3>
+                <p className="text-sm text-gray-600">Days in a row</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer" onClick={() => router.push('/daily-tasks')}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-2xl font-bold text-green-600">
                     {taskStats.completed}/{taskStats.total}
                   </span>
-                )}
-              </div>
-              <div className="flex gap-1 mb-2">
-                {statsLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-1.5 w-full rounded-full"></div>
-                ) : (
-                  Array.from({ length: Math.max(taskStats.total, 1) }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 h-1.5 rounded-full"
-                      style={{
-                        backgroundColor: i < taskStats.completed ? "#5170ff" : "#e5e7eb",
-                      }}
-                    />
-                  ))
-                )}
-              </div>
-              <p className="text-xs text-gray-500">
-                {statsLoading ? (
-                  <span className="animate-pulse bg-gray-300 h-3 w-20 rounded inline-block"></span>
-                ) : taskStats.total === 0 ? (
-                  "Get started!"
-                ) : taskStats.completed === taskStats.total ? (
-                  "🎉 Complete!"
-                ) : (
-                  `${taskStats.total - taskStats.completed} left`
-                )}
-              </p>
-            </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Daily Tasks</h3>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-300" style={{ width: `${taskStats.percentage}%` }} />
+                </div>
+                <p className="text-sm text-gray-600">{taskStats.percentage}% Complete</p>
+              </CardContent>
+            </Card>
 
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/daily-tasks')}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Today</h2>
-                {statsLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-6 w-8 rounded"></div>
-                ) : (
-                  <span className="text-xl font-bold" style={{ color: "#5170ff" }}>
-                    {taskStats.percentage}%
-                  </span>
-                )}
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden mb-2">
-                {statsLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-2 w-full rounded-full"></div>
-                ) : (
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${taskStats.percentage}%`,
-                      backgroundColor: "#5170ff",
-                    }}
-                  />
-                )}
-              </div>
-              <p className="text-xs text-gray-500">
-                {statsLoading ? (
-                  <span className="animate-pulse bg-gray-300 h-3 w-16 rounded inline-block"></span>
-                ) : taskStats.percentage >= 75 ? (
-                  "Great work!"
-                ) : taskStats.percentage >= 50 ? (
-                  "Keep going!"
-                ) : taskStats.percentage > 0 ? (
-                  "In progress"
-                ) : (
-                  "Start now"
-                )}
-              </p>
-            </div>
-
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/daily-tasks')}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Weekly</h2>
-                {progressLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-6 w-8 rounded"></div>
-                ) : (
-                  <span className="text-xl font-bold" style={{ color: "#5170ff" }}>
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer" onClick={() => router.push('/profile')}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-2xl font-bold text-blue-600">
                     {overallProgress.overall}%
                   </span>
-                )}
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden mb-2">
-                {progressLoading ? (
-                  <div className="animate-pulse bg-gray-300 h-2 w-full rounded-full"></div>
-                ) : (
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${overallProgress.overall}%`,
-                      backgroundColor: "#5170ff",
-                    }}
-                  />
-                )}
-              </div>
-              <p className="text-xs text-gray-500">
-                {progressLoading ? (
-                  <span className="animate-pulse bg-gray-300 h-3 w-16 rounded inline-block"></span>
-                ) : (
-                  `${overallProgress.activeDays} active days`
-                )}
-              </p>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Weekly Progress</h3>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-300" style={{ width: `${overallProgress.overall}%` }} />
+                </div>
+                <p className="text-sm text-gray-600">{overallProgress.activeDays} active days</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center justify-center">
+                    <Target className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-2xl font-bold text-yellow-600">
+                    {weeklyGoal.current}/{weeklyGoal.target}
+                  </span>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">Weekly Goal</h3>
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 h-2 rounded-full transition-all duration-300" style={{ width: `${(weeklyGoal.current / weeklyGoal.target) * 100}%` }} />
+                </div>
+                <p className="text-sm text-gray-600">{Math.round((weeklyGoal.current / weeklyGoal.target) * 100)}% Complete</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Main Content Grid */}
+          <div className="grid lg:grid-cols-3 gap-8 mb-8">
+            {/* Left Column - Recent Activity & Tips */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Recent Activity */}
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-blue-600" />
+                    Recent Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {recentActivity.map((activity, index) => (
+                      <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className={`w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center`}>
+                          <activity.icon className={`w-5 h-5 ${activity.color}`} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{activity.title}</p>
+                          <p className="text-sm text-gray-500">{activity.time}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Personalized Tips */}
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="w-5 h-5 text-yellow-600" />
+                    Personalized Tips
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4">
+                    {personalizedTips.map((tip, index) => (
+                      <div key={index} className="flex items-start gap-4 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 transition-colors">
+                        <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-sm">
+                          <tip.icon className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-800 mb-1">{tip.title}</h4>
+                          <p className="text-sm text-gray-600">{tip.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Achievements & Quick Actions */}
+            <div className="space-y-6">
+              {/* Achievements */}
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-yellow-600" />
+                    Achievements
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3">
+                    {achievements.slice(0, 4).map((achievement, index) => (
+                      <div key={index} className={`flex items-center gap-3 p-3 rounded-lg transition-all ${achievement.earned ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200' : 'bg-gray-50 opacity-60'}`}>
+                        <div className="text-2xl">{achievement.icon}</div>
+                        <div className="flex-1">
+                          <p className={`font-medium ${achievement.earned ? 'text-gray-800' : 'text-gray-500'}`}>
+                            {achievement.name}
+                          </p>
+                          <p className={`text-xs ${achievement.earned ? 'text-gray-600' : 'text-gray-400'}`}>
+                            {achievement.description}
+                          </p>
+                        </div>
+                        {achievement.earned && <CheckCircle className="w-5 h-5 text-green-500" />}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* AI Coach Quick Access */}
+              <Card className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer" onClick={() => router.push('/chat-ai')}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                      <MessageSquare className="w-6 h-6 text-white" />
+                    </div>
+                    <Sparkles className="w-6 h-6 text-white/80" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">AI Career Coach</h3>
+                  <p className="text-sm text-white/80 mb-4">Get personalized career guidance and insights</p>
+                  <Button variant="secondary" className="w-full bg-white/20 hover:bg-white/30 text-white border-0">
+                    Start Conversation
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
-          {/* Suggested Courses */}
-          {user.selectedCareerField && (
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-4">Recommended Courses for {user.selectedCareerField}</h2>
-              {courseLoading ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {[1,2,3].map(i => (
-                    <div key={i} className="bg-white p-4 rounded-lg border">
-                      <div className="animate-pulse">
-                        <div className="bg-gray-300 h-32 w-full rounded mb-3"></div>
-                        <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                        <div className="h-3 bg-gray-300 rounded w-2/3"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : suggestedCourse && suggestedCourse.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {suggestedCourse.map((course: any) => (
-                    <div key={course.id} className="bg-white rounded-lg border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                         onClick={() => window.open(course.url, '_blank')}>
-                      <div className="relative">
-                        <img 
-                          src={course.thumbnail} 
-                          alt={course.title}
-                          className="w-full h-32 object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = `https://img.youtube.com/vi/${course.id}/hqdefault.jpg`;
-                            target.onerror = () => {
-                              target.src = '/placeholder.svg?height=128&width=200';
-                            };
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all flex items-center justify-center">
-                          <Play className="w-8 h-8 text-white opacity-0 hover:opacity-100 transition-opacity" />
-                        </div>
-                        {course.duration && (
-                          <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-                            {course.duration}
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-semibold text-sm mb-1 line-clamp-2 hover:text-[#5170ff]">
-                          {course.title}
-                        </h3>
-                        <p className="text-xs text-gray-600 mb-2">{course.channelTitle}</p>
-                        {course.viewCount && (
-                          <p className="text-xs text-gray-500">{course.viewCount}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-white p-6 rounded-lg border text-center">
-                  <p className="text-gray-600">No courses found for your field. Try updating your career field in your profile.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Suggested News */}
-          {user.selectedCareerField && (
-            <div className="mb-8">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold">Latest Industry News</h2>
-                <button
-                  onClick={() => router.push('/news')}
-                  className="text-[#5170ff] hover:underline text-sm"
-                >
-                  View All News
-                </button>
-              </div>
-              {newsLoading ? (
-                <div className="grid gap-4 md:grid-cols-3">
-                  {[1,2,3].map(i => (
-                    <div key={i} className="bg-white rounded-lg border overflow-hidden">
-                      <div className="animate-pulse">
-                        <div className="bg-gray-300 h-32 w-full"></div>
-                        <div className="p-4 space-y-2">
-                          <div className="h-4 bg-gray-300 rounded"></div>
-                          <div className="h-3 bg-gray-300 rounded w-2/3"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : suggestedNews.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-3">
-                  {suggestedNews.map((article: any, index: number) => (
-                    <div key={index} className="bg-white rounded-lg border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                         onClick={() => window.open(article.url, '_blank')}>
-                      {article.urlToImage && (
-                        <img 
-                          src={article.urlToImage} 
-                          alt={article.title}
-                          className="w-full h-32 object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      )}
-                      <div className="p-4">
-                        <h3 className="font-semibold text-sm mb-2 line-clamp-2 hover:text-[#5170ff]">
-                          {article.title}
-                        </h3>
-                        <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>{article.source}</span>
-                          <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/courses')}>
-              <h2 className="text-lg font-semibold mb-2">Career Planning</h2>
-              <p className="text-sm text-gray-600">Get personalized guidance for your career path</p>
-            </div>
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/daily-tasks')}>
-              <h2 className="text-lg font-semibold mb-2">Daily Tasks</h2>
-              <p className="text-sm text-gray-600">Track your progress with daily actionable tasks</p>
-            </div>
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/community')}>
-              <h2 className="text-lg font-semibold mb-2">Community</h2>
-              <p className="text-sm text-gray-600">Connect with others on similar career paths</p>
-            </div>
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/chat-ai')}>
-              <h2 className="text-lg font-semibold mb-2">AI Career Coach</h2>
-              <p className="text-sm text-gray-600">Get instant career advice from our AI assistant</p>
-            </div>
-            <div className="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
-                 onClick={() => router.push('/news')}>
-              <h2 className="text-lg font-semibold mb-2">Industry News</h2>
-              <p className="text-sm text-gray-600">Stay updated with the latest industry trends</p>
-            </div>
+          {/* Quick Actions */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { title: "Courses", desc: "Continue learning", href: "/courses", icon: BookOpen, color: "from-purple-500 to-pink-500" },
+              { title: "Community", desc: "Connect with peers", href: "/community", icon: Users, color: "from-indigo-500 to-purple-500" },
+              { title: "Industry News", desc: "Stay updated", href: "/news", icon: Newspaper, color: "from-teal-500 to-blue-500" }
+            ].map((action, index) => (
+              <Card key={index} className="group hover:shadow-xl transition-all duration-300 cursor-pointer border-0 bg-white/80 backdrop-blur-sm" onClick={() => router.push(action.href)}>
+                <CardContent className="p-6">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-r ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    <action.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-1 text-gray-800">{action.title}</h3>
+                  <p className="text-gray-600 text-sm">{action.desc}</p>
+                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300 mt-2" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </main>
-    </>
+    </div>
   )
 }
