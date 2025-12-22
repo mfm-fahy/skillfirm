@@ -23,6 +23,8 @@ const server = http.createServer(app);
 const allowedOrigins = process.env.NODE_ENV === 'production' 
   ? [
       process.env.FRONTEND_URL,
+      'https://skillfirm-fnlv1.vercel.app',
+      'https://skillfirm-*.vercel.app', // Allow preview deployments
       'https://skillfarm-v9.vercel.app',
       'https://skillfarm-v9-*.vercel.app', // Allow preview deployments
       'https://*.vercel.app' // Allow all Vercel preview deployments
