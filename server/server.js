@@ -48,8 +48,11 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || 
-        (process.env.NODE_ENV === 'production' && origin.endsWith('.vercel.app'))) {
+    // Allow all Vercel deployments and localhost
+    if (origin.includes('vercel.app') || 
+        origin.includes('localhost') || 
+        origin.includes('127.0.0.1') ||
+        allowedOrigins.indexOf(origin) !== -1) {
       return callback(null, true);
     }
     
