@@ -260,6 +260,10 @@ Format as JSON with: development_paths (array of objects with path, skills_neede
 // Helper function to call OpenRouter API
 async function callOpenRouter(prompt) {
   try {
+    if (!process.env.OPENROUTER_API_KEY) {
+      throw new Error('OpenRouter API key not configured');
+    }
+
     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
       model: 'openai/gpt-3.5-turbo',
       messages: [
@@ -278,7 +282,8 @@ async function callOpenRouter(prompt) {
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 10000
     });
     
     const content = response.data.choices[0].message.content;
@@ -291,7 +296,11 @@ async function callOpenRouter(prompt) {
     }
   } catch (error) {
     console.error('OpenRouter API error:', error.response?.data || error.message);
-    throw new Error('AI service unavailable');
+    // Return fallback response instead of throwing
+    return {
+      response: 'AI service temporarily unavailable. Please try again later.',
+      fallback: true
+    };
   }
 }
 
@@ -600,16 +609,18 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ message: 'Message is required' });
     }
     
-    // Build context from conversation history
-    let contextMessages = [];
-    if (conversationHistory && conversationHistory.length > 0) {
-      contextMessages = conversationHistory.slice(-5).map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-    }
-    
-    const systemPrompt = `You are an expert AI career coach and mentor specializing in ${userField || 'career development'}. You provide personalized, actionable career guidance with deep industry knowledge.
+    let responseText;
+    try {
+      // Build context from conversation history
+      let contextMessages = [];
+      if (conversationHistory && conversationHistory.length > 0) {
+        contextMessages = conversationHistory.slice(-5).map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text
+        }));
+      }
+      
+      const systemPrompt = `You are an expert AI career coach and mentor specializing in ${userField || 'career development'}. You provide personalized, actionable career guidance with deep industry knowledge.
 
 User Context:
 - Name: ${userName || 'User'}
@@ -635,25 +646,31 @@ Response Guidelines:
 
 Response Format: Provide comprehensive yet concise guidance that directly addresses their query with actionable insights.`;
 
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...contextMessages,
-      { role: 'user', content: message }
-    ];
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...contextMessages,
+        { role: 'user', content: message }
+      ];
 
-    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-      model: 'openai/gpt-3.5-turbo',
-      messages,
-      temperature: 0.7,
-      max_tokens: 1500
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    const responseText = response.data.choices[0].message.content;
+      const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        model: 'openai/gpt-3.5-turbo',
+        messages,
+        temperature: 0.7,
+        max_tokens: 1500
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      
+      responseText = response.data.choices[0].message.content;
+    } catch (error) {
+      console.error('AI Chat API error:', error);
+      // Fallback response
+      responseText = `I understand you're asking about ${message}. While I'm having some technical difficulties right now, here are some general suggestions:\n\n1. Research current trends in ${userField || 'your field'}\n2. Network with professionals in your industry\n3. Update your skills through online courses\n4. Consider seeking mentorship\n\nPlease try asking your question again in a moment, and I'll provide more detailed guidance.`;
+    }
     
     // Determine response type based on content
     let responseType = 'text';
@@ -682,10 +699,17 @@ Response Format: Provide comprehensive yet concise guidance that directly addres
     });
   } catch (error) {
     console.error('Chat error:', error);
-    res.status(500).json({ 
-      message: 'Chat failed', 
+    res.json({ 
       response: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
-      error: error.message 
+      type: 'text',
+      metadata: {
+        confidence: 50,
+        sources: [],
+        relatedTopics: [],
+        actionItems: [],
+        followUpQuestions: []
+      },
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -739,7 +763,9 @@ router.post('/generate-daily-tasks', async (req, res) => {
       return res.status(400).json({ message: 'Field name is required' });
     }
     
-    const prompt = `Generate 5-7 comprehensive daily tasks for someone pursuing a career in "${field}". Each task should be actionable, realistic, and help with career development.
+    let response;
+    try {
+      const prompt = `Generate 5-7 comprehensive daily tasks for someone pursuing a career in "${field}". Each task should be actionable, realistic, and help with career development.
 
 ${enhancedTasks ? 'Include advanced features like priority levels, difficulty ratings, estimated time, career impact, and skills gained.' : ''}
 
@@ -774,10 +800,14 @@ Respond with JSON in this format:
 
 Make tasks specific to ${field} field, current industry trends, and career advancement opportunities. Include both immediate actions and strategic long-term activities.`;
 
-    const response = await callOpenRouter(prompt);
+      response = await callOpenRouter(prompt);
+    } catch (error) {
+      console.log('AI API failed, using fallback tasks');
+      response = { fallback: true };
+    }
     
-    // Ensure proper structure and enhance tasks
-    if (!response.tasks || !Array.isArray(response.tasks)) {
+    // Use fallback if AI failed or returned invalid data
+    if (!response.tasks || !Array.isArray(response.tasks) || response.fallback) {
       const fallbackTasks = generateFallbackTasks(field, enhancedTasks);
       return res.json({ tasks: fallbackTasks });
     }
@@ -809,7 +839,9 @@ Make tasks specific to ${field} field, current industry trends, and career advan
     });
   } catch (error) {
     console.error('Daily tasks generation error:', error);
-    res.status(500).json({ message: 'Task generation failed', error: error.message });
+    // Return fallback tasks instead of error
+    const fallbackTasks = generateFallbackTasks(req.body.field || 'General', req.body.enhancedTasks);
+    res.json({ tasks: fallbackTasks });
   }
 });
 

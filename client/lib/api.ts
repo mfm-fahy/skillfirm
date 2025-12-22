@@ -16,7 +16,7 @@ export const api = {
     courses: '/api/courses',
     newsletter: '/api/newsletter',
     realtime: '/api/realtime',
-    users: '/api/users'
+    users: '/api/user'
   }
 };
 
