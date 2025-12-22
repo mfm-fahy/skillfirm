@@ -80,7 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/courses', coursesRoutes);
 app.use('/api/realtime', realtimeRoutes);
